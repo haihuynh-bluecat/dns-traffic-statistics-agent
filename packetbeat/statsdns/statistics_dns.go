@@ -30,9 +30,6 @@ import (
 	"github.com/elastic/beats/packetbeat/outstats"
 	"github.com/elastic/beats/packetbeat/utils"
 	mkdns "github.com/miekg/dns"
-
-	"context"
-	"net/http"
 )
 
 const (
@@ -125,27 +122,11 @@ func InitStatisticsDNS() {
 			QStatDNS.SubStatDNS(&SubActive)
 		}()
 
-		server := http.Server{
-			Addr:         ":8080",
-			ReadTimeout:  30 * time.Second,
-			WriteTimeout: 30 * time.Second,
-		}
-
-		go func() {
-			if err := server.ListenAndServe(); err != nil {
-				logp.Info("faild to listen")
-			}
-		}()
-
-		StatSrv = &StatisticsService{}
-		ReqMap = &RequestMap{}
-
 		for IsActive {
 			timeStart := time.Now()
 			logp.Info("Starting %s", timeStart)
-			StatSrv.Start = timeStart
-			StatSrv.StatsMap = make(map[string]*StatisticsDNS, MaximumClients)
-			ReqMap.RequestMessage = make(map[string]map[string]string, MaximumClients)
+			StatSrv = &StatisticsService{Start: timeStart, StatsMap: make(map[string]*StatisticsDNS, MaximumClients)}
+			ReqMap = &RequestMap{RequestMessage: make(map[string]map[string]string, MaximumClients)}
 
 			CreateCounterMetricPerView(MapViewIPs)
 
@@ -168,10 +149,6 @@ func InitStatisticsDNS() {
 				outstats.PublishToSNMPAgent(string(b))
 			}()
 			mutex.Unlock()
-		}
-
-		if err := server.Shutdown(context.Background()); err != nil {
-			logp.Info("faild to Shutdown")
 		}
 	}()
 }
@@ -215,8 +192,8 @@ func newStats(clientIp string, metricType string) bool {
 }
 
 func ReceivedMessage(msg *model.Record) {
-	// mutex.Lock()
-	// defer mutex.Unlock()
+	mutex.Lock()
+	defer mutex.Unlock()
 	// Don't want to be calculating the internal messages
 	if utils.IsInternalCall(msg.Src.IP, msg.Dst.IP) {
 		return
@@ -326,13 +303,15 @@ func CreateCounterMetricPerView(mapViewIPs map[int]map[string][]string) {
 
 func Queries(srcIp string, dstIp string) {
 	if !utils.IsLocalIP(srcIp) {
-		if _, exist := StatSrv.StatsMap[srcIp]; exist {
-			IncrDNSStatsTotalQueries(srcIp)
-		}
+		IncrDNSStatsTotalQueries(srcIp)
+		// if _, exist := StatSrv.StatsMap[srcIp]; exist {
+		// 	IncrDNSStatsTotalQueries(srcIp)
+		// }
 	} else {
-		if _, exist := StatSrv.StatsMap[dstIp]; exist {
-			IncrDNSStatsTotalQueries(dstIp)
-		}
+		IncrDNSStatsTotalQueries(dstIp)
+		// if _, exist := StatSrv.StatsMap[dstIp]; exist {
+		// 	IncrDNSStatsTotalQueries(dstIp)
+		// }
 	}
 }
 
@@ -346,13 +325,15 @@ func QueriesForPerView(srcIp string) {
 
 func Response(srcIp string, dstIp string) {
 	if !utils.IsLocalIP(dstIp) {
-		if _, exist := StatSrv.StatsMap[dstIp]; exist {
-			IncrDNSStatsTotalResponses(dstIp)
-		}
+		IncrDNSStatsTotalResponses(dstIp)
+		// if _, exist := StatSrv.StatsMap[dstIp]; exist {
+		// 	IncrDNSStatsTotalResponses(dstIp)
+		// }
 	} else {
-		if _, exist := StatSrv.StatsMap[srcIp]; exist {
-			IncrDNSStatsTotalResponses(srcIp)
-		}
+		IncrDNSStatsTotalResponses(srcIp)
+		// if _, exist := StatSrv.StatsMap[srcIp]; exist {
+		// 	IncrDNSStatsTotalResponses(srcIp)
+		// }
 	}
 }
 
