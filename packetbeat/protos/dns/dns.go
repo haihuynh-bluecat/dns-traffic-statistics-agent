@@ -40,8 +40,6 @@ import (
 	"github.com/elastic/beats/packetbeat/model"
 	"github.com/elastic/beats/packetbeat/protos"
 
-	/////Bluecat Disable Old Statistic
-	//"github.com/elastic/beats/packetbeat/stats"
 	"github.com/elastic/beats/packetbeat/statsdns"
 	"github.com/elastic/beats/packetbeat/utils"
 	mkdns "github.com/miekg/dns"
@@ -66,8 +64,6 @@ type dnsPlugin struct {
 	// [Bluecat]
 	dropDecodedPacket bool
 
-	// kafkaConf *KafkaConfig
-	// kafkaProd sarama.AsyncProducer
 }
 
 var (
@@ -257,37 +253,6 @@ func New(
 		return nil, err
 	}
 
-	// kafkaCfg := dnsCfg.Kafka
-	// b, _ := json.Marshal(kafkaCfg)
-	// logp.Info("KAFKA: %s", string(b))
-	// kafkaConfig := sarama.NewConfig()
-	// clientID, err := uuid.NewV4()
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// kafkaConfig.ClientID = clientID.String()
-	// kafkaConfig.Producer.RequiredAcks = sarama.RequiredAcks(int16(*kafkaCfg.RequiredACKs))
-	// kafkaConfig.Producer.Compression = compressionModes[kafkaCfg.Compression]
-	// kafkaConfig.Producer.Flush.Frequency = kafkaCfg.FlushFrequency
-	// kafkaConfig.Producer.Flush.Messages = kafkaCfg.Messages
-	// kafkaConfig.Producer.Flush.MaxMessages = kafkaCfg.MaxMessages
-	// kafkaConfig.Producer.MaxMessageBytes = kafkaCfg.MaxMessageBytes
-	// kafkaConfig.Producer.Flush.Bytes = kafkaCfg.FlushMaxBytes
-	// kafkaConfig.ChannelBufferSize = kafkaCfg.ChanBufferSize
-	// kafkaConfig.Version, _ = kafkaCfg.Version.Get()
-	// kafkaConfig.Producer.Retry.Max = kafkaCfg.MaxRetries
-	// kafkaConfig.Producer.Retry.Backoff = kafkaCfg.RetryBackoffDuration
-
-	// kafkaProd, err := sarama.NewAsyncProducer(
-	// 	kafkaCfg.Hosts,
-	// 	kafkaConfig,
-	// )
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// p.kafkaConf = &kafkaCfg
-	// p.kafkaProd = kafkaProd
-
 	return p, nil
 }
 
@@ -365,9 +330,9 @@ func (dns *dnsPlugin) receivedDNSRequest(tuple *dnsTuple, msg *dnsMessage) {
 	}
 
 	//Bluecat
-	statsdns.CreateCounterMetric(srcIP, dstIP)
-	statsdns.IncreaseQueryCounter(srcIP, dstIP, statsdns.QUERY)
-	statsdns.IncreaseQueryCounterForPerView(srcIP, dstIP, statsdns.QUERY)
+	queryDNS := statsdns.NewQueryDNS(srcIP, dstIP, statsdns.QUERY)
+
+	statsdns.QStatDNS.PushStatDNS(queryDNS, nil)
 
 	trans := dns.deleteTransaction(tuple.hashable())
 	if trans != nil {
@@ -410,8 +375,9 @@ func (dns *dnsPlugin) receivedDNSResponse(tuple *dnsTuple, msg *dnsMessage) {
 	}
 
 	// Bluecat
-	statsdns.IncreaseQueryCounter(srcIP, dstIP, statsdns.RESPONSE)
-	statsdns.IncreaseQueryCounterForPerView(srcIP, dstIP, statsdns.RESPONSE)
+	queryDNS := statsdns.NewQueryDNS(srcIP, dstIP, statsdns.RESPONSE)
+
+	statsdns.QStatDNS.PushStatDNS(queryDNS, nil)
 
 	trans := dns.getTransaction(tuple.revHashable())
 	if trans == nil {
@@ -447,7 +413,6 @@ func (dns *dnsPlugin) receivedDNSResponse(tuple *dnsTuple, msg *dnsMessage) {
 	}
 	// Bluecat Determine the recursion query
 	if trans.request != nil && trans.request.data != nil {
-
 		statsdns.CalculateRecursiveMsg(trans.src.IP, trans.dst.IP, tuple.id, trans.request.data.Question, trans.response.data)
 	}
 
@@ -463,19 +428,12 @@ func (dns *dnsPlugin) publishTransaction(t *dnsTransaction) {
 
 	// [Bluecat]
 	if dns.dropDecodedPacket {
-		/////Bluecat Disable Old Statistic
-		//stats.IncrDNSDropped()
 		// Do nothing, just drop the decoded messages
 		// Use this for testing/benchmarking only
 		return
 	}
 
 	//[Bluecat]
-	//debugf("Publishing transaction. %s", t.tuple.String())
-	// re := &RecordEncoder{
-	// 	r: &Record{},
-	// }
-	// record := re.r
 	record := &model.Record{DNS: &model.DNS{}}
 	timestamp := t.ts
 	record.Type = "dns"
@@ -527,103 +485,14 @@ func (dns *dnsPlugin) publishTransaction(t *dnsTransaction) {
 		}
 		dnsRec = toDNSRecord(t.response.data, dns.includeAuthorities, dns.includeAdditionals)
 	}
-	//logp.Info("%v", dnsRec)
+	//logp.debug("%v", dnsRec)
 
 	record.DNS = dnsRec
-	// dns.kafkaProd.Input() <- &sarama.ProducerMessage{
-	// 	Timestamp: timestamp,
-	// 	Topic:     dns.kafkaConf.Topic,
-	// 	Value:     re,
-	// }
-	// stats.IncrKafkaPublished()
 
 	logp.Debug("Record Decoded", "%v", record)
 
-	statsdns.ReceivedMessage(record)
-	// debugf("dns result: %v", structs.Map(record))
-	// dns.results(beat.Event{
-	// 	Timestamp: timestamp,
-	// 	Fields:    structs.Map(record),
-	// })
-
-	//========================Old Original Code Work Fine =====================================
-	// timestamp := t.ts
-	// fields := common.MapStr{}
-	// fields["type"] = "dns"
-	// fields["transport"] = t.transport.String()
-	// fields["src"] = &t.src
-	// fields["dst"] = &t.dst
-	// fields["status"] = common.ERROR_STATUS
-	// if len(t.notes) == 1 {
-	// 	fields["notes"] = t.notes[0]
-	// } else if len(t.notes) > 1 {
-	// 	fields["notes"] = strings.Join(t.notes, " ")
-	// }
-
-	// dnsEvent := common.MapStr{}
-	// fields["dns"] = dnsEvent
-
-	// if t.request != nil && t.response != nil {
-	// 	fields["bytes_in"] = t.request.length
-	// 	fields["bytes_out"] = t.response.length
-	// 	fields["responsetime"] = float64(t.response.ts.Sub(t.ts).Nanoseconds()) / 1e6
-	// 	fields["method"] = dnsOpCodeToString(t.request.data.Opcode)
-	// 	if len(t.request.data.Question) > 0 {
-	// 		fields["query"] = dnsQuestionToString(t.request.data.Question[0])
-	// 		fields["resource"] = t.request.data.Question[0].Name
-	// 	}
-	// 	addDNSToMapStr(dnsEvent, t.response.data, dns.includeAuthorities,
-	// 		dns.includeAdditionals)
-
-	// 	if t.response.data.Rcode == 0 {
-	// 		fields["status"] = common.OK_STATUS
-	// 	}
-
-	// 	if dns.sendRequest {
-	// 		fields["request"] = dnsToString(t.request.data)
-	// 	}
-	// 	if dns.sendResponse {
-	// 		fields["response"] = dnsToString(t.response.data)
-	// 	}
-	// } else if t.request != nil {
-	// 	fields["bytes_in"] = t.request.length
-	// 	fields["method"] = dnsOpCodeToString(t.request.data.Opcode)
-	// 	if len(t.request.data.Question) > 0 {
-	// 		fields["query"] = dnsQuestionToString(t.request.data.Question[0])
-	// 		fields["resource"] = t.request.data.Question[0].Name
-	// 	}
-	// 	addDNSToMapStr(dnsEvent, t.request.data, dns.includeAuthorities,
-	// 		dns.includeAdditionals)
-
-	// 	if dns.sendRequest {
-	// 		fields["request"] = dnsToString(t.request.data)
-	// 	}
-	// } else if t.response != nil {
-	// 	fields["bytes_out"] = t.response.length
-	// 	fields["method"] = dnsOpCodeToString(t.response.data.Opcode)
-	// 	if len(t.response.data.Question) > 0 {
-	// 		fields["query"] = dnsQuestionToString(t.response.data.Question[0])
-	// 		fields["resource"] = t.response.data.Question[0].Name
-	// 	}
-	// 	addDNSToMapStr(dnsEvent, t.response.data, dns.includeAuthorities,
-	// 		dns.includeAdditionals)
-	// 	if dns.sendResponse {
-	// 		fields["response"] = dnsToString(t.response.data)
-	// 	}
-	// }
-
-	// messsage := common.MapStr{
-	// 	"timestamp": timestamp,
-	// 	"fields":    fields,
-	// }
-	// logp.Info("%v", messsage)
-	// stats.ReceivedMessage(messsage)
-	// dns.results(beat.Event{
-	// 	Timestamp: timestamp,
-	// 	Fields:    fields,
-	// })
-	//========================End Old Original Code =====================================
-
+	// statsdns.ReceivedMessage(record)
+	statsdns.QStatDNS.PushStatDNS(nil, record)
 }
 
 // dnsToString converts a DNS message to a string.
@@ -1176,68 +1045,6 @@ func rrsToString(r []mkdns.RR) string {
 	}
 	return strings.Join(rrStrs, "; ")
 }
-
-// TODO [Bluecat]
-// dnsToString converts a DNS message to a string.
-// func dnsToString(dns *mkdns.Msg) string {
-// 	var msgType string
-// 	if dns.Response {
-// 		msgType = "response"
-// 	} else {
-// 		msgType = "query"
-// 	}
-//
-// 	var t []string
-// 	if dns.Authoritative {
-// 		t = append(t, "aa")
-// 	}
-// 	if dns.Truncated {
-// 		t = append(t, "tc")
-// 	}
-// 	if dns.RecursionDesired {
-// 		t = append(t, "rd")
-// 	}
-// 	if dns.RecursionAvailable {
-// 		t = append(t, "ra")
-// 	}
-// 	if dns.AuthenticatedData {
-// 		t = append(t, "ad")
-// 	}
-// 	if dns.CheckingDisabled {
-// 		t = append(t, "cd")
-// 	}
-// 	flags := strings.Join(t, " ")
-//
-// 	var a []string
-// 	a = append(a, fmt.Sprintf("ID %d; QR %s; OPCODE %s; FLAGS %s; RCODE %s",
-// 		dns.Id, msgType, dnsOpCodeToString(dns.Opcode), flags,
-// 		dnsResponseCodeToString(dns.Rcode)))
-//
-// 	if len(dns.Question) > 0 {
-// 		t = []string{}
-// 		for _, question := range dns.Question {
-// 			t = append(t, dnsQuestionToString(question))
-// 		}
-// 		a = append(a, fmt.Sprintf("QUESTION %s", strings.Join(t, "; ")))
-// 	}
-//
-// 	if len(dns.Answer) > 0 {
-// 		a = append(a, fmt.Sprintf("ANSWER %s",
-// 			rrsToString(dns.Answer)))
-// 	}
-//
-// 	if len(dns.Ns) > 0 {
-// 		a = append(a, fmt.Sprintf("AUTHORITY %s",
-// 			rrsToString(dns.Ns)))
-// 	}
-//
-// 	if len(dns.Extra) > 0 {
-// 		a = append(a, fmt.Sprintf("ADDITIONAL %s",
-// 			rrsToString(dns.Extra)))
-// 	}
-//
-// 	return strings.Join(a, "; ")
-// }
 
 // decodeDnsData decodes a byte array into a DNS struct. If an error occurs
 // then the returned dns pointer will be nil. This method recovers from panics

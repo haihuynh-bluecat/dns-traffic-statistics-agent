@@ -30,6 +30,9 @@ import (
 	"github.com/elastic/beats/packetbeat/outstats"
 	"github.com/elastic/beats/packetbeat/utils"
 	mkdns "github.com/miekg/dns"
+
+	"context"
+	"net/http"
 )
 
 const (
@@ -101,48 +104,85 @@ var (
 	IpsServer                    []string
 	UrlAnnouncementDeployFromBam string
 	MapViewIPs                   map[int]map[string][]string
+	MaxQPS                       = 2000000
+	QStatDNS                     *QueueStatDNS
+	IsActive                     = false
+	SubActive                    = false
 )
 
 func InitStatisticsDNS() {
 	GetConfigDNSStatistics()
+	// Create chan for management Statistic DNS counter
+	QStatDNS = NewQueueStatDNS(MaxQPS)
+	IsActive = true
+
 	go func() {
 		ticker := time.NewTicker(StatInterval * time.Second)
 		defer ticker.Stop()
-		StatSrv = &StatisticsService{Start: time.Now(), StatsMap: make(map[string]*StatisticsDNS, MaximumClients)}
-		ReqMap = &RequestMap{RequestMessage: make(map[string]map[string]string, MaximumClients)}
-		//===================Create Counter For PerView============================
-		//go func() {
-		//	CreateCounterMetricPerView(MapViewIPs)
-		//}()
-		//===================End Create Counter For PerView========================
-		for {
-			//===================Create Counter For PerView==========================
-			go func() {
-				CreateCounterMetricPerView(MapViewIPs)
-			}()
-			//===================End Create Counter For PerView======================
-			t := <-ticker.C
+		go func() {
+			QStatDNS.isActive = true
+			QStatDNS.SubStatDNS(&SubActive)
+		}()
+
+		server := http.Server{
+			Addr:         ":8080",
+			ReadTimeout:  30 * time.Second,
+			WriteTimeout: 30 * time.Second,
+		}
+
+		go func() {
+			if err := server.ListenAndServe(); err != nil {
+				logp.Info("faild to listen")
+			}
+		}()
+
+		StatSrv = &StatisticsService{}
+		ReqMap = &RequestMap{}
+
+		for IsActive {
+			timeStart := time.Now()
+			logp.Info("Starting %s", timeStart)
+			StatSrv.Start = timeStart
+			StatSrv.StatsMap = make(map[string]*StatisticsDNS, MaximumClients)
+			ReqMap.RequestMessage = make(map[string]map[string]string, MaximumClients)
+
+			CreateCounterMetricPerView(MapViewIPs)
+
+			// Active flag sub for counter
+			SubActive = true
+
+			// Delay
+
+			timeEnd := <-ticker.C
 			mutex.Lock()
-			logp.Info("Starting %s", t)
-			StatSrv.End = t
+			SubActive = false
+			StatSrv.End = timeEnd
 			b, err := json.Marshal(StatSrv)
 			if err != nil {
 				logp.Error(err)
 				continue
 			}
+
 			logp.Info("DNS_Statistics: %s", b)
 			// open new thread to call the API
 			go func() {
 				outstats.PublishToSNMPAgent(string(b))
 			}()
-			StatSrv = &StatisticsService{Start: t, StatsMap: make(map[string]*StatisticsDNS, MaximumClients)}
-			ReqMap = &RequestMap{RequestMessage: make(map[string]map[string]string, MaximumClients)}
 			mutex.Unlock()
+		}
+
+		if err := server.Shutdown(context.Background()); err != nil {
+			logp.Info("faild to Shutdown")
 		}
 	}()
 }
 
-func IsValidInACL(statIP string, metricType string) bool{
+func Stop() {
+	IsActive = false
+	QStatDNS.Stop()
+}
+
+func IsValidInACL(statIP string, metricType string) bool {
 	switch metricType {
 	case CLIENT:
 		if !utils.CheckIPInRanges(statIP, IpNetsClient, IpsClient) {
@@ -176,8 +216,8 @@ func newStats(clientIp string, metricType string) bool {
 }
 
 func ReceivedMessage(msg *model.Record) {
-	mutex.Lock()
-	defer mutex.Unlock()
+	// mutex.Lock()
+	// defer mutex.Unlock()
 	// Don't want to be calculating the internal messages
 	if utils.IsInternalCall(msg.Src.IP, msg.Dst.IP) {
 		return
@@ -243,7 +283,6 @@ func ReceivedMessage(msg *model.Record) {
 		// We already handled when parsing the packets
 		IncrDNSStatsFormatError(clientIP)
 		IncrDNSStatsFormatErrorForPerView(clientIP, metricType)
-
 	} else {
 		IncrDNSStatsOtherRCode(clientIP)
 		IncrDNSStatsOtherRCodeForPerView(clientIP, metricType)
@@ -253,7 +292,7 @@ func ReceivedMessage(msg *model.Record) {
 	CalculateAverageTimePerView(clientIP, responseTime, metricType)
 }
 
-func CheckMetricType(srcIp string, dstIp string) (statIP string, metricType string){
+func CheckMetricType(srcIp string, dstIp string) (statIP string, metricType string) {
 	if utils.IsLocalIP(dstIp) {
 		statIP = srcIp
 		metricType = CLIENT
@@ -290,28 +329,10 @@ func Queries(srcIp string, dstIp string) {
 	if !utils.IsLocalIP(srcIp) {
 		if _, exist := StatSrv.StatsMap[srcIp]; exist {
 			IncrDNSStatsTotalQueries(srcIp)
-		} else {
-			go func() {
-				time.Sleep(time.Second)
-				status := newStats(srcIp, CLIENT)
-				if status == false {
-					return
-				}
-				IncrDNSStatsTotalQueries(srcIp)
-			}()
 		}
 	} else {
 		if _, exist := StatSrv.StatsMap[dstIp]; exist {
 			IncrDNSStatsTotalQueries(dstIp)
-		} else {
-			go func(){
-				time.Sleep(time.Second)
-				status := newStats(dstIp, AUTHSERVER)
-				if status == false{
-					return
-				}
-				IncrDNSStatsTotalQueries(dstIp)
-			}()
 		}
 	}
 }
@@ -328,28 +349,10 @@ func Response(srcIp string, dstIp string) {
 	if !utils.IsLocalIP(dstIp) {
 		if _, exist := StatSrv.StatsMap[dstIp]; exist {
 			IncrDNSStatsTotalResponses(dstIp)
-		} else {
-			go func(){
-				time.Sleep(time.Second)
-				status := newStats(dstIp, CLIENT)
-				if status == false{
-					return
-				}
-				IncrDNSStatsTotalResponses(dstIp)
-			}()
 		}
 	} else {
 		if _, exist := StatSrv.StatsMap[srcIp]; exist {
 			IncrDNSStatsTotalResponses(srcIp)
-		} else {
-			go func() {
-				time.Sleep(time.Second)
-				status := newStats(srcIp, AUTHSERVER)
-				if status == false {
-					return
-				}
-				IncrDNSStatsTotalResponses(srcIp)
-			}()
 		}
 	}
 }
