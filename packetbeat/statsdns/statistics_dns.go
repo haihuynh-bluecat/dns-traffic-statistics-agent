@@ -106,15 +106,16 @@ var (
 	MapViewIPs                   map[int]map[string][]string
 	MaxQPS                       = 2000000
 	QStatDNS                     *QueueStatDNS
-	IsActive                     = false
-	SubActive                    = false
+	IsActive                     bool
+	SubActive                    bool
 )
 
 func InitStatisticsDNS() {
 	GetConfigDNSStatistics()
 	// Create chan for management Statistic DNS counter
 	QStatDNS = NewQueueStatDNS(MaxQPS)
-	IsActive = true
+	IsActive := true
+	SubActive := false
 
 	go func() {
 		ticker := time.NewTicker(StatInterval * time.Second)
@@ -150,8 +151,6 @@ func InitStatisticsDNS() {
 
 			// Active flag sub for counter
 			SubActive = true
-
-			// Delay
 
 			timeEnd := <-ticker.C
 			mutex.Lock()

@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/signal"
 	"runtime"
 	"syscall"
 	"time"
@@ -181,6 +180,7 @@ func (s *Sniffer) Run() error {
 	debugf("Number Decoder: %d", s.config.DecoderNum)
 	//decoderWorkers := make([]Worker, s.config.DecoderNum)
 	jobChan := make(chan *model.PacketWrapper, 10000)
+	defer close(jobChan)
 	// for i := 0; i < 1; i++ {
 	// 	debugf("Worker Factory")
 	// 	worker, err := s.factory(handle.LinkType())
@@ -273,11 +273,7 @@ func (s *Sniffer) Run() error {
 	// worker.OnPacket(pkt.Data, pkt.CaptureInfo)
 	// counter++
 
-	close(jobChan)
-
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, os.Kill)
-	<-c
+	
 
 	return nil
 }
