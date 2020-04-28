@@ -43,10 +43,10 @@ func NewQueryDNS(srcIP, dstIP, qryType string) (queryDNS *QueryDNS) {
 	return
 }
 
-func NewQueueStatDNS(poolSize int) (queue *QueueStatDNS) {
+func NewQueueStatDNS() (queue *QueueStatDNS) {
 	queue = &QueueStatDNS{
-		queries:     make(chan *QueryDNS, poolSize),
-		records:     make(chan *model.Record, poolSize),
+		queries:     make(chan *QueryDNS),
+		records:     make(chan *model.Record),
 		isActive:    false,
 	}
 	return
@@ -70,7 +70,7 @@ func (queue *QueueStatDNS) SubStatDNS(flagActive *bool) {
 			if query == nil {
 				continue
 			}
-			CreateCounterMetric(query.srcIP, query.dstIP)
+			// CreateCounterMetric(query.srcIP, query.dstIP)
 			IncreaseQueryCounter(query.srcIP, query.dstIP, query.qryType)
 			IncreaseQueryCounterForPerView(query.srcIP, query.dstIP, query.qryType)
 		case record := <-queue.records:

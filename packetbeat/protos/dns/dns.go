@@ -1111,7 +1111,7 @@ func handleErrorMsg(srcIP, dstIP string, transp transport, rawData []byte, tuple
 			statsdns.HandleResponseDecodeErr(dstIP, srcIP, dnsResponseCodeToString(dnsHdr.MsgHdr.Rcode))
 		}
 	} else {
-		statsdns.CreateCounterMetric(srcIP, dstIP)
+		// statsdns.CreateCounterMetric(srcIP, dstIP)
 		statsdns.HandleRequestDecodeErr(srcIP, dstIP)
 	}
 }

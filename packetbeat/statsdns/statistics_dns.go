@@ -101,7 +101,6 @@ var (
 	IpsServer                    []string
 	UrlAnnouncementDeployFromBam string
 	MapViewIPs                   map[int]map[string][]string
-	MaxQPS                       = 2000000
 	QStatDNS                     *QueueStatDNS
 	IsActive                     bool
 	SubActive                    bool
@@ -110,7 +109,7 @@ var (
 func InitStatisticsDNS() {
 	GetConfigDNSStatistics()
 	// Create chan for management Statistic DNS counter
-	QStatDNS = NewQueueStatDNS(MaxQPS)
+	QStatDNS = NewQueueStatDNS()
 	IsActive := true
 	SubActive := false
 
@@ -161,23 +160,23 @@ func Stop() {
 func IsValidInACL(statIP string, metricType string) bool {
 	switch metricType {
 	case CLIENT:
-		if !utils.CheckIPInRanges(statIP, IpNetsClient, IpsClient) {
-			return false
+		if utils.CheckIPInRanges(statIP, IpNetsClient, IpsClient) {
+			return true
 		}
 	case AUTHSERVER:
-		if !utils.CheckIPInRanges(statIP, IpNetsServer, IpsServer) {
-			return false
+		if utils.CheckIPInRanges(statIP, IpNetsServer, IpsServer) {
+			return true
 		}
 	}
-	return true
+	return false
 }
 
 //Create statistics for perClient, perServer and perView. Note metricType="perView" => (key of map statistic clientIP = key viewName)
 func newStats(clientIp string, metricType string) bool {
 	// Don't want to be calculating the internal messages or ip that doesn't in range in config statistics_config.json
-	if !IsValidInACL(clientIp, metricType) {
-		return false
-	}
+	// if !IsValidInACL(clientIp, metricType) {
+	// 	return false
+	// }
 	if _, exist := StatSrv.StatsMap[clientIp]; !exist {
 		averagetime := float64(0)
 		stats := &StatisticsDNS{
@@ -209,6 +208,10 @@ func ReceivedMessage(msg *model.Record) {
 	responseTime := msg.ResponseTime
 	responseCode := msg.DNS.ResponseCode
 	authoritiesCount := msg.DNS.AuthoritiesCount
+
+	if !IsValidInACL(clientIP, metricType) {
+		return
+	}
 
 	// First message for this client/AS
 	if !newStats(clientIP, metricType) {
@@ -268,24 +271,36 @@ func ReceivedMessage(msg *model.Record) {
 	CalculateAverageTimePerView(clientIP, responseTime, metricType)
 }
 
-func CheckMetricType(srcIp string, dstIp string) (statIP string, metricType string) {
+func CheckMetricType(srcIp string, dstIp string, mode string) (statIP string, metricType string) {
 	if utils.IsLocalIP(dstIp) {
 		statIP = srcIp
-		metricType = CLIENT
+		switch mode {
+		case QUERY:
+			metricType = CLIENT
+		case RESPONSE:
+			metricType = AUTHSERVER
+		}
 	} else {
 		statIP = dstIp
-		metricType = AUTHSERVER
+		switch mode {
+		case QUERY:
+			metricType = AUTHSERVER
+		case RESPONSE:
+			metricType = CLIENT
+		}
 	}
 	return
 }
 
 //Create metric for the Client/AS/Forwarder
-func CreateCounterMetric(srcIp string, dstIp string) {
-	// if utils.IsInternalCall(srcIp, dstIp) {
-	// 	return
-	// }
-	statIP, metricType := CheckMetricType(srcIp, dstIp)
+func CreateCounterMetric(srcIp string, dstIp string, mode string) (statIP string){
+	statIP, metricType := CheckMetricType(srcIp, dstIp, mode)
+	if !IsValidInACL(statIP, metricType) {
+		return ""
+	}
+
 	newStats(statIP, metricType)
+	return
 }
 
 //Create metric for perView
@@ -302,17 +317,29 @@ func CreateCounterMetricPerView(mapViewIPs map[int]map[string][]string) {
 }
 
 func Queries(srcIp string, dstIp string) {
-	if !utils.IsLocalIP(srcIp) {
-		IncrDNSStatsTotalQueries(srcIp)
-		// if _, exist := StatSrv.StatsMap[srcIp]; exist {
-		// 	IncrDNSStatsTotalQueries(srcIp)
-		// }
-	} else {
-		IncrDNSStatsTotalQueries(dstIp)
-		// if _, exist := StatSrv.StatsMap[dstIp]; exist {
-		// 	IncrDNSStatsTotalQueries(dstIp)
-		// }
+	if statIP := CreateCounterMetric(srcIp, dstIp, QUERY); statIP != ""{
+		IncrDNSStatsTotalQueries(statIP)
 	}
+
+	// if !utils.IsLocalIP(srcIp) {
+	// 	if !IsValidInACL(srcIp, metricType) {
+	// 		return
+	// 	}
+	// 	newStats(statIP, metricType)
+	// 	IncrDNSStatsTotalQueries(srcIp)
+	// 	// if _, exist := StatSrv.StatsMap[srcIp]; exist {
+	// 	// 	IncrDNSStatsTotalQueries(srcIp)
+	// 	// }
+	// } else {
+	// 	if !IsValidInACL(dstIp, metricType) {
+	// 		return
+	// 	}
+	// 	newStats(statIP, metricType)
+	// 	IncrDNSStatsTotalQueries(dstIp)
+	// 	// if _, exist := StatSrv.StatsMap[dstIp]; exist {
+	// 	// 	IncrDNSStatsTotalQueries(dstIp)
+	// 	// }
+	// }
 }
 
 func QueriesForPerView(srcIp string) {
@@ -324,17 +351,22 @@ func QueriesForPerView(srcIp string) {
 }
 
 func Response(srcIp string, dstIp string) {
-	if !utils.IsLocalIP(dstIp) {
-		IncrDNSStatsTotalResponses(dstIp)
-		// if _, exist := StatSrv.StatsMap[dstIp]; exist {
-		// 	IncrDNSStatsTotalResponses(dstIp)
-		// }
-	} else {
-		IncrDNSStatsTotalResponses(srcIp)
-		// if _, exist := StatSrv.StatsMap[srcIp]; exist {
-		// 	IncrDNSStatsTotalResponses(srcIp)
-		// }
+	if statIP := CreateCounterMetric(srcIp, dstIp, RESPONSE); statIP != ""{
+		IncrDNSStatsTotalResponses(statIP)
 	}
+
+	
+	// if !utils.IsLocalIP(dstIp) {
+	// 	IncrDNSStatsTotalResponses(dstIp)
+	// 	// if _, exist := StatSrv.StatsMap[dstIp]; exist {
+	// 	// 	IncrDNSStatsTotalResponses(dstIp)
+	// 	// }
+	// } else {
+	// 	IncrDNSStatsTotalResponses(srcIp)
+	// 	// if _, exist := StatSrv.StatsMap[srcIp]; exist {
+	// 	// 	IncrDNSStatsTotalResponses(srcIp)
+	// 	// }
+	// }
 }
 
 func ResponseForPerView(dstIp string) {
@@ -750,36 +782,36 @@ func existQuery(rqKey, rqItem, metricType string) bool {
 
 func HandleRequestDecodeErr(clientIP, srvIP string) {
 	if !utils.IsInternalCall(clientIP, srvIP) {
-		if !utils.IsLocalIP(clientIP) {
-			IncrDNSStatsTotalQueries(clientIP)
-			IncrDNSStatsTotalQueriesForPerView(clientIP)
+		if statIP := CreateCounterMetric(srvIP, clientIP, QUERY); statIP != ""{
+			IncrDNSStatsTotalQueries(statIP)
+			IncrDNSStatsTotalQueriesForPerView(statIP)
 		}
 	}
 }
 
 func HandleResponseDecodeErr(clientIP, srvIP string, RCodeString string) {
 	if !utils.IsInternalCall(clientIP, srvIP) {
-		if !utils.IsLocalIP(clientIP) {
+		if statIP := CreateCounterMetric(srvIP, clientIP, RESPONSE); statIP != ""{
+			IncrDNSStatsTotalResponses(statIP)
+			ResponseForPerView(statIP)
 			if RCodeString == FORMERR {
-				IncrDNSStatsFormatError(clientIP)
-				IncrDNSStatsFormatErrorForPerView(clientIP, CLIENT)
+				IncrDNSStatsFormatError(statIP)
+				IncrDNSStatsFormatErrorForPerView(statIP, CLIENT)
 			} else {
-				IncrDNSStatsOtherRCode(clientIP)
-				IncrDNSStatsOtherRCodeForPerView(clientIP, CLIENT)
+				IncrDNSStatsOtherRCode(statIP)
+				IncrDNSStatsOtherRCodeForPerView(statIP, CLIENT)
 			}
-			IncrDNSStatsTotalResponses(clientIP)
-			ResponseForPerView(clientIP)
 		}
 	}
 }
 
 func HandleResponseTruncated(clientIP, srvIP string) {
 	if !utils.IsInternalCall(clientIP, srvIP) {
-		if !utils.IsLocalIP(clientIP) {
-			IncrDNSStatsSuccessful(clientIP)
-			IncrDNSStatsSuccessfulForPerView(clientIP, CLIENT)
-			IncrDNSStatsTotalResponses(clientIP)
-			ResponseForPerView(clientIP)
+		if statIP := CreateCounterMetric(srvIP, clientIP, RESPONSE); statIP != ""{
+			IncrDNSStatsSuccessful(statIP)
+			IncrDNSStatsSuccessfulForPerView(statIP, CLIENT)
+			IncrDNSStatsTotalResponses(statIP)
+			ResponseForPerView(statIP)
 		}
 	}
 }
