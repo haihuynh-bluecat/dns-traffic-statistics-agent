@@ -171,12 +171,13 @@ func IsValidInACL(statIP string, metricType string) bool {
 	return false
 }
 
-//Create statistics for perClient, perServer and perView. Note metricType="perView" => (key of map statistic clientIP = key viewName)
+// Create statistics for perClient, perServer and perView. 
+// Note metricType="perView" => (key of map statistic clientIP = key viewName)
 func newStats(clientIp string, metricType string) bool {
 	// Don't want to be calculating the internal messages or ip that doesn't in range in config statistics_config.json
-	// if !IsValidInACL(clientIp, metricType) {
-	// 	return false
-	// }
+	if !IsValidInACL(clientIp, metricType) {
+		return false
+	}
 	if _, exist := StatSrv.StatsMap[clientIp]; !exist {
 		averagetime := float64(0)
 		stats := &StatisticsDNS{
@@ -209,14 +210,14 @@ func ReceivedMessage(msg *model.Record) {
 	responseCode := msg.DNS.ResponseCode
 	authoritiesCount := msg.DNS.AuthoritiesCount
 
-	if !IsValidInACL(clientIP, metricType) {
-		return
-	}
-
 	// First message for this client/AS
 	if !newStats(clientIP, metricType) {
 		return
 	}
+
+	// Increase TotalResponse
+	IncrDNSStatsTotalResponses(clientIP)
+	ResponseForPerView(clientIP)
 
 	if responseCode == NOERROR {
 		if answersCount > 0 {
@@ -295,10 +296,6 @@ func CheckMetricType(srcIp string, dstIp string, mode string) (statIP string, me
 //Create metric for the Client/AS/Forwarder
 func CreateCounterMetric(srcIp string, dstIp string, mode string) (statIP string){
 	statIP, metricType := CheckMetricType(srcIp, dstIp, mode)
-	if !IsValidInACL(statIP, metricType) {
-		return ""
-	}
-
 	newStats(statIP, metricType)
 	return
 }

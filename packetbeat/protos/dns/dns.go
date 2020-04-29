@@ -374,11 +374,6 @@ func (dns *dnsPlugin) receivedDNSResponse(tuple *dnsTuple, msg *dnsMessage) {
 		return
 	}
 
-	// Bluecat
-	queryDNS := statsdns.NewQueryDNS(srcIP, dstIP, statsdns.RESPONSE)
-
-	statsdns.QStatDNS.PushStatDNS(queryDNS, nil)
-
 	trans := dns.getTransaction(tuple.revHashable())
 	if trans == nil {
 		trans = newTransaction(msg.ts, tuple.reverse(), msg.cmdlineTuple.Reverse())
