@@ -330,7 +330,7 @@ func (dns *dnsPlugin) receivedDNSRequest(tuple *dnsTuple, msg *dnsMessage) {
 	}
 
 	//Bluecat
-	queryDNS := statsdns.NewQueryDNS(srcIP, dstIP, statsdns.QUERY)
+	queryDNS := statsdns.NewQueryDNS(srcIP, dstIP)
 
 	statsdns.QStatDNS.PushStatDNS(queryDNS, nil)
 

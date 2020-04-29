@@ -24,7 +24,6 @@ type (
 	QueryDNS struct {
 		srcIP   string
 		dstIP   string
-		qryType string
 	}
 
 	QueueStatDNS struct {
@@ -34,11 +33,10 @@ type (
 	}
 )
 
-func NewQueryDNS(srcIP, dstIP, qryType string) (queryDNS *QueryDNS) {
+func NewQueryDNS(srcIP, dstIP string) (queryDNS *QueryDNS) {
 	queryDNS = &QueryDNS{
 		srcIP:   srcIP,
 		dstIP:   dstIP,
-		qryType: qryType,
 	}
 	return
 }
@@ -71,8 +69,8 @@ func (queue *QueueStatDNS) SubStatDNS(flagActive *bool) {
 				continue
 			}
 			// CreateCounterMetric(query.srcIP, query.dstIP)
-			IncreaseQueryCounter(query.srcIP, query.dstIP, query.qryType)
-			IncreaseQueryCounterForPerView(query.srcIP, query.dstIP, query.qryType)
+			IncreaseQueryCounter(query.srcIP, query.dstIP, QUERY)
+			IncreaseQueryCounterForPerView(query.srcIP, query.dstIP, QUERY)
 		case record := <-queue.records:
 			if record == nil {
 				continue

@@ -135,6 +135,7 @@ func InitStatisticsDNS() {
 			timeEnd := <-ticker.C
 			mutex.Lock()
 			SubActive = false
+			// time.Sleep(time.Second)
 			StatSrv.End = timeEnd
 			b, err := json.Marshal(StatSrv)
 			if err != nil {
@@ -167,6 +168,8 @@ func IsValidInACL(statIP string, metricType string) bool {
 		if utils.CheckIPInRanges(statIP, IpNetsServer, IpsServer) {
 			return true
 		}
+	case VIEW:
+		return true
 	}
 	return false
 }
@@ -296,7 +299,9 @@ func CheckMetricType(srcIp string, dstIp string, mode string) (statIP string, me
 //Create metric for the Client/AS/Forwarder
 func CreateCounterMetric(srcIp string, dstIp string, mode string) (statIP string){
 	statIP, metricType := CheckMetricType(srcIp, dstIp, mode)
-	newStats(statIP, metricType)
+	if !newStats(statIP, metricType) {
+		statIP = ""
+	}
 	return
 }
 
