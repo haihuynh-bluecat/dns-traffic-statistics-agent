@@ -135,7 +135,6 @@ func InitStatisticsDNS() {
 			timeEnd := <-ticker.C
 			mutex.Lock()
 			SubActive = false
-			// time.Sleep(time.Second)
 			StatSrv.End = timeEnd
 			b, err := json.Marshal(StatSrv)
 			if err != nil {
@@ -174,7 +173,7 @@ func IsValidInACL(statIP string, metricType string) bool {
 	return false
 }
 
-// Create statistics for perClient, perServer and perView. 
+// Create statistics for perClient, perServer and perView.
 // Note metricType="perView" => (key of map statistic clientIP = key viewName)
 func newStats(clientIp string, metricType string) bool {
 	// Don't want to be calculating the internal messages or ip that doesn't in range in config statistics_config.json
@@ -217,6 +216,12 @@ func ReceivedMessage(msg *model.Record) {
 	if !newStats(clientIP, metricType) {
 		return
 	}
+
+	defer func (){
+		if err := recover(); err != nil {
+            return
+        }
+	}()
 
 	// Increase TotalResponse
 	IncrDNSStatsTotalResponses(clientIP)
@@ -297,7 +302,7 @@ func CheckMetricType(srcIp string, dstIp string, mode string) (statIP string, me
 }
 
 //Create metric for the Client/AS/Forwarder
-func CreateCounterMetric(srcIp string, dstIp string, mode string) (statIP string){
+func CreateCounterMetric(srcIp string, dstIp string, mode string) (statIP string) {
 	statIP, metricType := CheckMetricType(srcIp, dstIp, mode)
 	if !newStats(statIP, metricType) {
 		statIP = ""
@@ -319,7 +324,7 @@ func CreateCounterMetricPerView(mapViewIPs map[int]map[string][]string) {
 }
 
 func Queries(srcIp string, dstIp string) {
-	if statIP := CreateCounterMetric(srcIp, dstIp, QUERY); statIP != ""{
+	if statIP := CreateCounterMetric(srcIp, dstIp, QUERY); statIP != "" {
 		IncrDNSStatsTotalQueries(statIP)
 	}
 
@@ -353,11 +358,10 @@ func QueriesForPerView(srcIp string) {
 }
 
 func Response(srcIp string, dstIp string) {
-	if statIP := CreateCounterMetric(srcIp, dstIp, RESPONSE); statIP != ""{
+	if statIP := CreateCounterMetric(srcIp, dstIp, RESPONSE); statIP != "" {
 		IncrDNSStatsTotalResponses(statIP)
 	}
 
-	
 	// if !utils.IsLocalIP(dstIp) {
 	// 	IncrDNSStatsTotalResponses(dstIp)
 	// 	// if _, exist := StatSrv.StatsMap[dstIp]; exist {
@@ -784,7 +788,7 @@ func existQuery(rqKey, rqItem, metricType string) bool {
 
 func HandleRequestDecodeErr(clientIP, srvIP string) {
 	if !utils.IsInternalCall(clientIP, srvIP) {
-		if statIP := CreateCounterMetric(srvIP, clientIP, QUERY); statIP != ""{
+		if statIP := CreateCounterMetric(srvIP, clientIP, QUERY); statIP != "" {
 			IncrDNSStatsTotalQueries(statIP)
 			IncrDNSStatsTotalQueriesForPerView(statIP)
 		}
@@ -793,7 +797,7 @@ func HandleRequestDecodeErr(clientIP, srvIP string) {
 
 func HandleResponseDecodeErr(clientIP, srvIP string, RCodeString string) {
 	if !utils.IsInternalCall(clientIP, srvIP) {
-		if statIP := CreateCounterMetric(srvIP, clientIP, RESPONSE); statIP != ""{
+		if statIP := CreateCounterMetric(srvIP, clientIP, RESPONSE); statIP != "" {
 			IncrDNSStatsTotalResponses(statIP)
 			ResponseForPerView(statIP)
 			if RCodeString == FORMERR {
@@ -809,7 +813,7 @@ func HandleResponseDecodeErr(clientIP, srvIP string, RCodeString string) {
 
 func HandleResponseTruncated(clientIP, srvIP string) {
 	if !utils.IsInternalCall(clientIP, srvIP) {
-		if statIP := CreateCounterMetric(srvIP, clientIP, RESPONSE); statIP != ""{
+		if statIP := CreateCounterMetric(srvIP, clientIP, RESPONSE); statIP != "" {
 			IncrDNSStatsSuccessful(statIP)
 			IncrDNSStatsSuccessfulForPerView(statIP, CLIENT)
 			IncrDNSStatsTotalResponses(statIP)

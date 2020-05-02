@@ -15,6 +15,8 @@
 package statsdns
 
 import (
+	"time"
+
 	"github.com/elastic/beats/libbeat/logp"
 	"github.com/elastic/beats/packetbeat/model"
 )
@@ -51,6 +53,9 @@ func NewQueueStatDNS() (queue *QueueStatDNS) {
 }
 
 func (queue *QueueStatDNS) PushStatDNS(queryDNS *QueryDNS, record *model.Record) {
+	if !queue.isActive{
+		return
+	}
 	if queryDNS != nil {
 		queue.queries <- queryDNS
 	} else if record != nil {
@@ -68,6 +73,7 @@ func (queue *QueueStatDNS) SubStatDNS(flagActive *bool) {
 			if query == nil {
 				continue
 			}
+			time.Sleep(5 * time.Microsecond)
 			// CreateCounterMetric(query.srcIP, query.dstIP)
 			IncreaseQueryCounter(query.srcIP, query.dstIP, QUERY)
 			IncreaseQueryCounterForPerView(query.srcIP, query.dstIP, QUERY)
@@ -75,6 +81,7 @@ func (queue *QueueStatDNS) SubStatDNS(flagActive *bool) {
 			if record == nil {
 				continue
 			}
+			time.Sleep(5 * time.Microsecond)
 			ReceivedMessage(record)
 		}
 	}
