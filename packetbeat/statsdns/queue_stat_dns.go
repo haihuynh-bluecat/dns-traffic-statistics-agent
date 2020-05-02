@@ -73,7 +73,6 @@ func (queue *QueueStatDNS) SubStatDNS(flagActive *bool) {
 			if query == nil {
 				continue
 			}
-			time.Sleep(5 * time.Microsecond)
 			// CreateCounterMetric(query.srcIP, query.dstIP)
 			IncreaseQueryCounter(query.srcIP, query.dstIP, QUERY)
 			IncreaseQueryCounterForPerView(query.srcIP, query.dstIP, QUERY)
