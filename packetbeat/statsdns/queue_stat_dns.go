@@ -24,36 +24,54 @@ import (
 type (
 	// DNS data after decode
 	QueryDNS struct {
-		srcIP   string
-		dstIP   string
+		srcIP        string
+		dstIP        string
+		isDuplicated bool
+	}
+	RecursiveDNS struct {
+		IP        string
+		isSuccess bool
 	}
 
 	QueueStatDNS struct {
-		isActive    bool
-		queries     chan *QueryDNS
-		records     chan *model.Record
+		isActive   bool
+		isPopWait  bool
+		queries    chan *QueryDNS
+		recursives chan *RecursiveDNS
+		records    chan *model.Record
 	}
 )
 
-func NewQueryDNS(srcIP, dstIP string) (queryDNS *QueryDNS) {
+func NewQueryDNS(srcIP, dstIP string, isDuplicated bool) (queryDNS *QueryDNS) {
 	queryDNS = &QueryDNS{
-		srcIP:   srcIP,
-		dstIP:   dstIP,
+		srcIP:        srcIP,
+		dstIP:        dstIP,
+		isDuplicated: isDuplicated,
+	}
+	return
+}
+
+func NewRecursiveDNS(IP string, isSuccess bool) (recursiveDNS *RecursiveDNS) {
+	recursiveDNS = &RecursiveDNS{
+		IP:        IP,
+		isSuccess: isSuccess,
 	}
 	return
 }
 
 func NewQueueStatDNS() (queue *QueueStatDNS) {
 	queue = &QueueStatDNS{
-		queries:     make(chan *QueryDNS),
-		records:     make(chan *model.Record),
-		isActive:    false,
+		queries:    make(chan *QueryDNS),
+		recursives: make(chan *RecursiveDNS),
+		records:    make(chan *model.Record),
+		isActive:   false,
+		isPopWait:  true,
 	}
 	return
 }
 
 func (queue *QueueStatDNS) PushStatDNS(queryDNS *QueryDNS, record *model.Record) {
-	if !queue.isActive{
+	if !queue.isActive {
 		return
 	}
 	if queryDNS != nil {
@@ -63,9 +81,17 @@ func (queue *QueueStatDNS) PushStatDNS(queryDNS *QueryDNS, record *model.Record)
 	}
 }
 
-func (queue *QueueStatDNS) SubStatDNS(flagActive *bool) {
+func (queue *QueueStatDNS) PushRecursiveDNS(recursiveDNS *RecursiveDNS) {
+	if !queue.isActive {
+		return
+	}
+	queue.recursives <- recursiveDNS
+}
+
+func (queue *QueueStatDNS) PopStatDNS() {
 	for queue.isActive {
-		if *flagActive == false {
+		if queue.isPopWait {
+			time.Sleep(100 * time.Microsecond)
 			continue
 		}
 		select {
@@ -73,9 +99,22 @@ func (queue *QueueStatDNS) SubStatDNS(flagActive *bool) {
 			if query == nil {
 				continue
 			}
-			// CreateCounterMetric(query.srcIP, query.dstIP)
 			IncreaseQueryCounter(query.srcIP, query.dstIP, QUERY)
 			IncreaseQueryCounterForPerView(query.srcIP, query.dstIP, QUERY)
+			if query.isDuplicated {
+				IncrDNSStatsDuplicated(query.srcIP)
+				IncrDNSStatsDuplicatedForPerView(query.srcIP)
+			}
+		case recursive := <-queue.recursives:
+			if recursive == nil {
+				continue
+			}
+			IncrDNSStatsRecursive(recursive.IP)
+			IncrDNSStatsRecursiveForPerView(recursive.IP)
+			if recursive.isSuccess {
+				IncrDNSStatsSuccessfulRecursive(recursive.IP)
+				IncrDNSStatsSuccessfulRecursiveForPerView(recursive.IP)
+			}
 		case record := <-queue.records:
 			if record == nil {
 				continue
@@ -90,5 +129,6 @@ func (queue *QueueStatDNS) Stop() {
 	logp.Info("QueueStatDNS Stop")
 	queue.isActive = false
 	close(queue.queries)
+	close(queue.recursives)
 	close(queue.records)
 }

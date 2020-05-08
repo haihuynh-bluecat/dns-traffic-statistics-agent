@@ -323,31 +323,29 @@ func (dns *dnsPlugin) receivedDNSRequest(tuple *dnsTuple, msg *dnsMessage) {
 	// [Bluecat]
 	srcIP := msg.tuple.SrcIP.String()
 	dstIP := msg.tuple.DstIP.String()
+	isDuplicated := false
 
 	// Don't receive internal DNS request
 	if utils.IsInternalCall(srcIP, dstIP) {
 		return
 	}
 
-	//Bluecat
-	queryDNS := statsdns.NewQueryDNS(srcIP, dstIP)
-
-	statsdns.QStatDNS.PushStatDNS(queryDNS, nil)
-
 	trans := dns.deleteTransaction(tuple.hashable())
 	if trans != nil {
 		// This happens if a client puts multiple requests in flight
 		// with the same ID.
 		//Bluecat Check Duplicate Messsage
-		clientIP := trans.src.IP
-		statsdns.IncrDNSStatsDuplicated(clientIP)
-		statsdns.IncrDNSStatsDuplicatedForPerView(clientIP)
+		isDuplicated = true
+
 		trans.notes = append(trans.notes, duplicateQueryMsg.Error())
-		// TODO [Bluecat]
 		debugf("%s %s", duplicateQueryMsg.Error(), tuple.String())
 		dns.publishTransaction(trans)
 		dns.deleteTransaction(trans.tuple.hashable())
 	}
+
+	//Bluecat
+	queryDNS := statsdns.NewQueryDNS(srcIP, dstIP, isDuplicated)
+	statsdns.QStatDNS.PushStatDNS(queryDNS, nil)
 
 	trans = newTransaction(msg.ts, *tuple, *msg.cmdlineTuple)
 

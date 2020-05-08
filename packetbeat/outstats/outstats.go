@@ -26,7 +26,7 @@ import (
 )
 
 var (
-	client    = &http.Client{}
+	client    = &http.Client{Timeout: 5 * time.Second}
 	cacheData = make([]string, 0)
 	mutex     = &sync.RWMutex{}
 )
@@ -84,6 +84,7 @@ func resendData() {
 		if err != nil {
 			break
 		}
+		defer resp.Body.Close()
 		popElementInCache()
 		logp.Info("Out Statistics From Cached")
 		printHttpBodyResult(resp)
@@ -92,14 +93,13 @@ func resendData() {
 
 func PublishToSNMPAgent(data string) {
 	resp, err := sendData(data)
-	defer resp.Body.Close()
 	if err != nil {
 		pushElementInCache(data)
 		logp.Debug("outstats", "CACHED DATA %v", cacheData)
 		logp.Error(err)
 		return
-	} else {
-		printHttpBodyResult(resp)
-		resendData()
 	}
+	defer resp.Body.Close()
+	printHttpBodyResult(resp)
+	resendData()
 }
