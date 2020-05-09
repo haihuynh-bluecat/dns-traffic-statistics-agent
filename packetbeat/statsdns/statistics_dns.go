@@ -125,6 +125,8 @@ func InitStatisticsDNS() {
 			logp.Info("Starting %s", timeStart)
 			StatSrv = &StatisticsService{Start: timeStart, StatsMap: make(map[string]*StatisticsDNS, MaximumClients)}
 			ReqMap = &RequestMap{RequestMessage: make(map[string]map[string]string, MaximumClients)}
+			ReqMap.RequestMessage[RQ_C_MAP] = make(map[string]string)
+			ReqMap.RequestMessage[RQ_S_MAP] = make(map[string]string)
 
 			CreateCounterMetricPerView(MapViewIPs)
 
@@ -218,7 +220,7 @@ func ReceivedMessage(msg *model.Record) {
 
 	defer func() {
 		if err := recover(); err != nil {
-			QStatDNS.PushStatDNS(nil, msg)
+			QStatDNS.PushRecordDNS(msg)
 			logp.Debug("statsdns.ReceivedMessage"," %s", err)
 			return
 		}
@@ -329,7 +331,7 @@ func Queries(srcIp string, dstIp string) {
 		if err := recover(); err != nil {
 			// Default isDuplicated false in here
 			queryDNS := NewQueryDNS(srcIp, dstIp, false)
-			QStatDNS.PushStatDNS(queryDNS, nil)
+			QStatDNS.PushQueryDNS(queryDNS)
 			logp.Debug("statsdns.Queries"," %s", err)
 			return
 		}
@@ -687,9 +689,6 @@ func AddRequestMsgMap(clientIP, srvIP string, reqID uint16, questions []mkdns.Qu
 				rqItem = rqKey
 			}
 			mutex.Lock()
-			if _, exist := ReqMap.RequestMessage[metricType]; !exist {
-				ReqMap.RequestMessage[metricType] = make(map[string]string)
-			}
 			// Make sure only the first received query will be added into the map
 			// The first received client's request will be counted as recursion in case recursion happened
 			if _, exist := ReqMap.RequestMessage[metricType][rqKey]; !exist {

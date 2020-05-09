@@ -345,7 +345,7 @@ func (dns *dnsPlugin) receivedDNSRequest(tuple *dnsTuple, msg *dnsMessage) {
 
 	//Bluecat
 	queryDNS := statsdns.NewQueryDNS(srcIP, dstIP, isDuplicated)
-	statsdns.QStatDNS.PushStatDNS(queryDNS, nil)
+	statsdns.QStatDNS.PushQueryDNS(queryDNS)
 
 	trans = newTransaction(msg.ts, *tuple, *msg.cmdlineTuple)
 
@@ -484,8 +484,7 @@ func (dns *dnsPlugin) publishTransaction(t *dnsTransaction) {
 
 	logp.Debug("Record Decoded", "%v", record)
 
-	// statsdns.ReceivedMessage(record)
-	statsdns.QStatDNS.PushStatDNS(nil, record)
+	statsdns.QStatDNS.PushRecordDNS(record)
 }
 
 // dnsToString converts a DNS message to a string.

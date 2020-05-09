@@ -70,15 +70,18 @@ func NewQueueStatDNS() (queue *QueueStatDNS) {
 	return
 }
 
-func (queue *QueueStatDNS) PushStatDNS(queryDNS *QueryDNS, record *model.Record) {
+func (queue *QueueStatDNS) PushQueryDNS(queryDNS *QueryDNS) {
 	if !queue.isActive {
 		return
 	}
-	if queryDNS != nil {
-		queue.queries <- queryDNS
-	} else if record != nil {
-		queue.records <- record
+	queue.queries <- queryDNS
+}
+
+func (queue *QueueStatDNS) PushRecordDNS(record *model.Record) {
+	if !queue.isActive {
+		return
 	}
+	queue.records <- record
 }
 
 func (queue *QueueStatDNS) PushRecursiveDNS(recursiveDNS *RecursiveDNS) {
@@ -109,6 +112,7 @@ func (queue *QueueStatDNS) PopStatDNS() {
 			if recursive == nil {
 				continue
 			}
+			time.Sleep(5 * time.Microsecond)
 			IncrDNSStatsRecursive(recursive.IP)
 			IncrDNSStatsRecursiveForPerView(recursive.IP)
 			if recursive.isSuccess {

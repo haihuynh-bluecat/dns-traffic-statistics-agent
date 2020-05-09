@@ -20,6 +20,9 @@ package main
 import (
 	"github.com/elastic/beats/packetbeat/cmd"
 	"os"
+
+	"net/http"
+	_ "net/http/pprof"
 )
 
 var Name = "packetbeat"
@@ -30,6 +33,12 @@ func main() {
 	// 	Duration: 15 * time.Second,
 	// })
 	// autopprof.Capture(autopprof.HeapProfile{})
+
+	go func(){
+		if err := http.ListenAndServe(":8000", nil); err != nil {
+			panic(err)
+		}
+	}()
 
 	if err := cmd.RootCmd.Execute(); err != nil {
 		os.Exit(1)
