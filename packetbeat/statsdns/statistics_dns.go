@@ -367,6 +367,8 @@ func IncreaseQueryCounter(srcIp string, dstIp string, mode string) {
 	// if utils.IsInternalCall(srcIp, dstIp) {
 	// 	return
 	// }
+	mutex.Lock()
+	defer mutex.Unlock()
 	switch mode {
 	case QUERY:
 		Queries(srcIp, dstIp)
