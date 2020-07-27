@@ -73,10 +73,10 @@ jobs:
             export GOPATH=$HOME/gocode
             go version
             go env
+            ls -la $GOPATH/src/github.com/elastic/beats/vendor/github.com
+            cat $GOPATH/src/github.com/elastic/beats/vendor/github.com/tsg/gopacket/afpacket/afpacket.go | grep headerNextNeeded
+            rm -rf $GOPATH/src/github.com/elastic/beats/vendor/github.com/tsg/gopacket
             cd $GOPATH/src/github.com/elastic/beats/packetbeat
-            cat $GOPATH/src/github.com/elastic/beats/vendor/tsg/gopacket/afpacket/afpacket.go | grep headerNextNeeded
-            rm -rf $GOPATH/src/github.com/elastic/beats/vendor/tsg/gopacket
-            go build
             go get -t -d -v ./...
             ls $GOPATH/src/github.com/elastic/beats/vendor/tsg
             cat $GOPATH/src/github.com/tsg/gopacket/afpacket/afpacket.go | grep headerNextNeeded
