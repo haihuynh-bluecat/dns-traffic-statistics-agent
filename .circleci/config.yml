@@ -78,7 +78,7 @@ jobs:
             rm -rf $GOPATH/src/github.com/elastic/beats/vendor/github.com/tsg/gopacket
             cd $GOPATH/src/github.com/elastic/beats/packetbeat
             go get -t -d -v ./...
-            ls $GOPATH/src/github.com/elastic/beats/vendor/tsg
+            ls $GOPATH/src/github.com/elastic/beats/vendor/github.com
             cat $GOPATH/src/github.com/tsg/gopacket/afpacket/afpacket.go | grep headerNextNeeded
             go build
       - run:
