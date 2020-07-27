@@ -74,7 +74,13 @@ jobs:
             go version
             go env
             cd $GOPATH/src/github.com/elastic/beats/packetbeat
+            cat $GOPATH/src/github.com/elastic/beats/vendor/tsg/gopacket/afpacket/afpacket.go | grep headerNextNeeded
+            rm -rf $GOPATH/src/github.com/elastic/beats/vendor/tsg/gopacket
+            go build
             go get -t -d -v ./...
+            cat $GOPATH/src/github.com/elastic/beats/vendor/tsg/gopacket/afpacket/afpacket.go | grep headerNextNeeded
+            ls $GOPATH/src/github.com/elastic/beats/vendor/tsg
+            cat $GOPATH/src/github.com/tsg/gopacket/afpacket/afpacket.go | grep headerNextNeeded
             go build
       - run:
           name: Prepare to public
