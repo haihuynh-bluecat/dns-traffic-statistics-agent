@@ -27,4 +27,4 @@ imports: python-env
 
 .PHONY: build
 build: mage
-    @mage GolangCrossBuild
+	@mage GolangCrossBuild
