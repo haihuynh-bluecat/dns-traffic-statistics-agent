@@ -55,6 +55,7 @@ jobs:
             go get -t -d -v ./...
             echo "Check new gopacket"
             cat $GOPATH/src/github.com/tsg/gopacket/afpacket/afpacket.go
+            ls -la $GOPATH/bin
             mage -f -compile build/mage-linux-amd64
             PLATFORM_ID=linux-arm64 CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ GOOS=linux GOARCH=arm64 make build
       - run:
