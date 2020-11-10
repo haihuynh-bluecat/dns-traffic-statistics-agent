@@ -18,13 +18,13 @@ jobs:
       - run:
           name: Update and install required libraries.
           command: |
-            sudo apt-get update -q
-            sudo apt-get install -q -y gcc gcc-doc make make-doc gcc-multilib glibc-doc manpages-dev
+            apt-get update -q
+            apt-get install -q -y gcc make gcc-multilib glibc-doc manpages-dev wget git
       - run:
           name: Setup Golang environment
           command: |
             wget -q https://dl.google.com/go/$GO_TGZ
-            sudo tar -vzxf $GO_TGZ -C /usr/local go
+            tar -vzxf $GO_TGZ -C /usr/local go
       - run:
           name: Clone packetbeat project
           command: |
