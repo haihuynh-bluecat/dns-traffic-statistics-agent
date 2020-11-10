@@ -5,7 +5,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: cimg/base:stable
+      - image: debian:stretch
     environment:
       BEAT_VERSION: v6.5.4
       GO_TGZ: go1.10.8.linux-amd64.tar.gz
@@ -58,6 +58,7 @@ jobs:
             cat $GOPATH/src/github.com/tsg/gopacket/afpacket/afpacket.go
             ls -la $GOPATH/bin
             echo "Build"
+            cat Makefile
             PLATFORM_ID=linux-arm64 CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ GOOS=linux GOARCH=arm64 make build
       - run:
           name: Prepare to public
@@ -71,7 +72,6 @@ jobs:
             cp -rf ~/repo/dns-snmp-agent/ ./${CIRCLE_PROJECT_REPONAME}/
             cp -rf ~/repo/dns_traffic_deploy.sh ./${CIRCLE_PROJECT_REPONAME}/
             tar -czvf ${CIRCLE_PROJECT_REPONAME}.tar.gz ${CIRCLE_PROJECT_REPONAME}
-
       - run:
           name: Publish Release on GitHub
           command: |
