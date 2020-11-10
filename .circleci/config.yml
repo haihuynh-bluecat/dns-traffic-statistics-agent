@@ -19,6 +19,7 @@ jobs:
           name: Update and install required libraries.
           command: |
             sudo apt-get update -q
+            sudo apt-get install -q -y gcc gcc-doc make make-doc gcc-multilib glibc-doc manpages-dev
       - run:
           name: Setup Golang environment
           command: |
