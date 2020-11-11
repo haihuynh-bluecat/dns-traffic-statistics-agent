@@ -19,7 +19,10 @@ jobs:
           name: Update and install required libraries.
           command: |
             apt-get update -q
-            apt-get install -q -y gcc make gcc-multilib glibc-doc manpages-dev wget git
+            apt-get install -q -y gcc make gcc-multilib glibc-doc manpages-dev wget git flex byacc
+            apt-get update && apt-get install -y --no-install-recommends --allow-unauthenticated \
+                  crossbuild-essential-arm64 \
+                  linux-libc-dev-arm64-cross 
       - run:
           name: Setup Golang environment
           command: |
@@ -47,25 +50,21 @@ jobs:
             go env
             cd $GOPATH/src
             go install github.com/elastic/beats/vendor/github.com/magefile/mage
-            ls -la $GOPATH/src/github.com/elastic/beats/vendor/github.com/tsg
-            echo "Check old gopacket"
-            cat $GOPATH/src/github.com/elastic/beats/vendor/github.com/tsg/gopacket/afpacket/afpacket.go
-            echo "Remove old gopacket"
-            rm -rf $GOPATH/src/github.com/elastic/beats/vendor/github.com/tsg/gopacket
             cd $GOPATH/src/github.com/elastic/beats/packetbeat
+            echo "Remove old gopacket"
+            rm -rf $GOPATH/src/github.com/elastic/beats/vendor/github.com/tsg
             go get -t -d -v ./...
-            echo "Check new gopacket"
-            cat $GOPATH/src/github.com/tsg/gopacket/afpacket/afpacket.go
-            ls -la $GOPATH/bin
-            echo "Build"
-            cat Makefile
-            PLATFORM_ID=linux-arm64 CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ GOOS=linux GOARCH=arm64 make build
+            echo "Test mage"
+            mage
+            echo "Build ARM architecture binary"
+            GOLANG_CROSSBUILD=1 CGO_ENABLED=1 PLATFORM_ID=linux-arm64 CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ GOOS=linux GOARCH=arm64 make build
+            echo "Build AMD architecture binary"
+            GOLANG_CROSSBUILD=1 CGO_ENABLED=1 CC=gcc CXX=g++ GOARCH=amd64 GOARM= GOOS=linux PLATFORM_ID=linux-amd64 make build
+            ls -la $GOPATH/src/github.com/elastic/beats/packetbeat/build/golang-crossbuild
       - run:
           name: Prepare to public
           command: |
             export GOPATH=/go
-            ls -la ~/repo
-            ls -la $GOPATH/src/github.com/elastic/beats/packetbeat
             mkdir -p ~/repo/artifacts/${CIRCLE_PROJECT_REPONAME}/{packetbeat,backup}
             cd ~/repo/artifacts/
             cp $GOPATH/src/github.com/elastic/beats/packetbeat/build/golang-crossbuild/packetbeat-linux-arm64 ./${CIRCLE_PROJECT_REPONAME}/packetbeat/
@@ -78,7 +77,6 @@ jobs:
             export PATH=/usr/local/go/bin:$PATH
             export GOPATH=/go
             go get -u github.com/tcnksm/ghr
-            ls -la $GOPATH/bin
             echo $CIRCLE_PROJECT_USERNAME
             echo $CIRCLE_PROJECT_REPONAME
             echo ${CIRCLE_TAG}
