@@ -9,7 +9,7 @@ jobs:
     environment:
       BEAT_VERSION: v6.5.4
       GO_TGZ: go1.10.8.linux-amd64.tar.gz
-      GOPATH: $HOME/gocode
+      GOPATH: /go
     working_directory: ~/repo
     steps:
       - attach_workspace:
@@ -28,20 +28,20 @@ jobs:
       - run:
           name: Clone packetbeat project
           command: |
-            export GOPATH=~/gocode
+            export GOPATH=/go
             mkdir -p $GOPATH/src/github.com/elastic
             cd $GOPATH/src/github.com/elastic
             git clone --branch $BEAT_VERSION https://github.com/elastic/beats
       - run:
           name: Replace Bluecat Packetbeat
           command: |
-            export GOPATH=~/gocode
+            export GOPATH=/go
             rm -rf ${GOPATH}/src/github.com/elastic/beats/packetbeat
             cp -rf ~/repo/packetbeat ${GOPATH}/src/github.com/elastic/beats/packetbeat
       - run:
           name: Build packetbeat
           command: |
-            export GOPATH=$HOME/gocode
+            export GOPATH=/go
             export PATH=/usr/local/go/bin:$GOPATH/bin:$PATH
             go version
             go env
@@ -63,7 +63,7 @@ jobs:
       - run:
           name: Prepare to public
           command: |
-            export GOPATH=~/gocode
+            export GOPATH=/go
             ls -la ~/repo
             ls -la $GOPATH/src/github.com/elastic/beats/packetbeat
             mkdir -p ~/repo/artifacts/${CIRCLE_PROJECT_REPONAME}/{packetbeat,backup}
@@ -76,7 +76,7 @@ jobs:
           name: Publish Release on GitHub
           command: |
             export PATH=/usr/local/go/bin:$PATH
-            export GOPATH=~/gocode
+            export GOPATH=/go
             go get -u github.com/tcnksm/ghr
             ls -la $GOPATH/bin
             echo $CIRCLE_PROJECT_USERNAME
