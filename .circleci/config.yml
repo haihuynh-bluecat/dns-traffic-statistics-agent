@@ -77,7 +77,7 @@ jobs:
           command: |
             export GOPATH=/go
             export AMD_FOLDER_NAME=${CIRCLE_PROJECT_REPONAME}-amd64
-            mkdir -p ~/repo/artifacts/${AMD_FOLDER_NAME}-amd64/{packetbeat,backup}
+            mkdir -p ~/repo/artifacts/${AMD_FOLDER_NAME}/{packetbeat,backup}
             cd ~/repo/artifacts/
             cp $GOPATH/src/github.com/elastic/beats/packetbeat/build/golang-crossbuild/packetbeat-linux-amd64 ./${AMD_FOLDER_NAME}/packetbeat/packetbeat
             cp -rf ~/repo/dns-snmp-agent/ ./${AMD_FOLDER_NAME}/
