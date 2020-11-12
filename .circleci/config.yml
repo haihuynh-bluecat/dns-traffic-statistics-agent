@@ -62,20 +62,33 @@ jobs:
             GOLANG_CROSSBUILD=1 CGO_ENABLED=1 CC=gcc CXX=g++ GOARCH=amd64 GOARM= GOOS=linux PLATFORM_ID=linux-amd64 make build
             ls -la $GOPATH/src/github.com/elastic/beats/packetbeat/build/golang-crossbuild
       - run:
-          name: Prepare to public
+          name: Prepare ARM package to public
           command: |
             export GOPATH=/go
-            mkdir -p ~/repo/artifacts/${CIRCLE_PROJECT_REPONAME}/{packetbeat,backup}
+            export ARM_FOLDER_NAME=${CIRCLE_PROJECT_REPONAME}-arm64
+            mkdir -p ~/repo/artifacts/${ARM_FOLDER_NAME}/{packetbeat,backup}
             cd ~/repo/artifacts/
-            cp $GOPATH/src/github.com/elastic/beats/packetbeat/build/golang-crossbuild/packetbeat-linux-arm64 ./${CIRCLE_PROJECT_REPONAME}/packetbeat/
-            cp -rf ~/repo/dns-snmp-agent/ ./${CIRCLE_PROJECT_REPONAME}/
-            cp -rf ~/repo/dns_traffic_deploy.sh ./${CIRCLE_PROJECT_REPONAME}/
-            tar -czvf ${CIRCLE_PROJECT_REPONAME}.tar.gz ${CIRCLE_PROJECT_REPONAME}
+            cp $GOPATH/src/github.com/elastic/beats/packetbeat/build/golang-crossbuild/packetbeat-linux-arm64 ./${ARM_FOLDER_NAME}/packetbeat/packetbeat
+            cp -rf ~/repo/dns-snmp-agent/ ./${ARM_FOLDER_NAME}/
+            cp -rf ~/repo/dns_traffic_deploy.sh ./${ARM_FOLDER_NAME}/
+            tar -czvf ${ARM_FOLDER_NAME}.tar.gz ${ARM_FOLDER_NAME}
+      - run:
+          name: Prepare AMD64 package to public
+          command: |
+            export GOPATH=/go
+            export AMD_FOLDER_NAME=${CIRCLE_PROJECT_REPONAME}-amd64
+            mkdir -p ~/repo/artifacts/${AMD_FOLDER_NAME}-amd64/{packetbeat,backup}
+            cd ~/repo/artifacts/
+            cp $GOPATH/src/github.com/elastic/beats/packetbeat/build/golang-crossbuild/packetbeat-linux-amd64 ./${AMD_FOLDER_NAME}/packetbeat/packetbeat
+            cp -rf ~/repo/dns-snmp-agent/ ./${AMD_FOLDER_NAME}/
+            cp -rf ~/repo/dns_traffic_deploy.sh ./${AMD_FOLDER_NAME}/
+            tar -czvf ${AMD_FOLDER_NAME}.tar.gz ${AMD_FOLDER_NAME}
       - run:
           name: Publish Release on GitHub
           command: |
             export PATH=/usr/local/go/bin:$PATH
             export GOPATH=/go
+            ls -la  ~/repo/artifacts
             go get -u github.com/tcnksm/ghr
             echo $CIRCLE_PROJECT_USERNAME
             echo $CIRCLE_PROJECT_REPONAME
